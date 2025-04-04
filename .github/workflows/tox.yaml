@@ -1,6 +1,7 @@
 name: Run tests with Tox
 
-on: [pull_request]
+on: 
+- pull_request
 
 jobs:
   call-inclusive-naming-check:
@@ -13,4 +14,6 @@ jobs:
     name: Lint Unit
     uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@main
     needs:
-      - call-inclusive-naming-check 
+    - call-inclusive-naming-check
+    with:
+      python: "['3.10', '3.12']"
