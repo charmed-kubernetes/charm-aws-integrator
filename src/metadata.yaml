@@ -1,0 +1,27 @@
+name: aws-integrator
+display-name: AWS-Integrator
+summary: |
+  Charm to enable AWS integrations via Juju relations.
+description: |
+  This charm can grant select permissions to instances of applications
+  related to it which enable integration with AWS specific features,
+  such as ELB, EBS, etc.
+docs: https://discourse.charmhub.io/t/aws-integrator-docs-index/6100
+maintainers: ['Cory Johns <cory.johns@canonical.com>']
+series:
+  - jammy
+  - noble
+tags: ['aws', 'native', 'integration']
+provides:
+  aws:
+    interface: aws-integration
+  rds-mysql:
+    interface: mysql
+resources:
+  aws-cli:
+    type: file
+    filename: aws-cli.snap
+    description: |
+      Resource to side-load aws-cli snap in network-restricted deployments.
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
