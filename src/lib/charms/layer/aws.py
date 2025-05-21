@@ -214,6 +214,7 @@ def _enable_policy(policy_name, application_name, instance_id, region, patterns=
     role_name = _get_role_name(application_name, instance_id, region)
     _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
+
     if supports_patterns:
         _add_app_entity(application_name, "policy", policy_arn)
 
@@ -265,10 +266,14 @@ def _iam_tag(resource: str, *_, by_name: str = "", by_arn: str = ""):
         ValueError: If both by_name and by_arn are specified
         ValueError: If resource is not a valid type or name/arn is missing
     """
-
-    if by_name and by_arn:
-        raise ValueError("Cannot specify both name and ARN for tagging")
+    if not any((by_name, by_arn)):
+        raise ValueError(f"Must specify either name or ARN for tagging {resource=}")
+    elif by_name and by_arn:
+        raise ValueError(f"Cannot specify both name and ARN for tagging {resource=}")
     elif resource == "policy" and by_arn:
+        if MODEL_UUID not in by_arn:
+            log(f"No need to tag policy {by_arn=} without {MODEL_UUID=}")
+            return
         _aws(
             "iam",
             "tag-policy",
@@ -316,10 +321,6 @@ def update_policies():
         except DoesNotExistAWSError:
             _ensure_policy(policy_name)
             stats["new"] += 1
-        model_policy = ENTITY_PREFIX + "." + MODEL_UUID
-        if policy_name.startswith(model_policy):
-            # this policy is managed by us, so we need to tag it
-            _iam_tag("policy", by_arn=policy_arn)
 
     # loop over all policies we currently support (files on disk)
     policies = {f.stem for f in Path("files/policies").glob("*.json")}
@@ -891,6 +892,7 @@ def _ensure_policy(policy_name):
     """
     if not policy_name.startswith(ENTITY_PREFIX):
         policy_name = "{}.{}".format(ENTITY_PREFIX, policy_name)
+    policy_arn = _get_policy_arn(policy_name)
     policy_file = _get_policy_file(policy_name)
     policy_file_url = "file://{}".format(policy_file.absolute())
     try:
@@ -905,6 +907,7 @@ def _ensure_policy(policy_name):
         log("Loaded IAM policy: {}", policy_name)
     except AlreadyExistsAWSError:
         log("Policy already exists: {} ({})", policy_name, policy_file)
+    _iam_tag("policy", by_arn=policy_arn)
 
 
 def _policy_needs_update(policy_arn):
@@ -967,6 +970,7 @@ def _add_new_policy_version(policy_arn):
         policy_file_url,
         "--set-as-default",
     )
+    _iam_tag("policy", by_arn=policy_arn)
 
 
 def _get_role_name(application_name, instance_id, region):
