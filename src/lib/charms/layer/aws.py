@@ -30,6 +30,8 @@ MACHINE_ID = os.environ["JUJU_MACHINE_ID"]
 REGION = os.environ["JUJU_AVAILABILITY_ZONE"].rstrip(string.ascii_lowercase)
 MAX_ROLE_NAME_LEN = 64
 MAX_POLICY_NAME_LEN = 128
+JUJU_MODEL_UUID_TAG = "Key=juju-model-uuid,Value={}".format(MODEL_UUID)
+
 
 urandom = SystemRandom()
 
@@ -212,6 +214,7 @@ def _enable_policy(policy_name, application_name, instance_id, region, patterns=
     role_name = _get_role_name(application_name, instance_id, region)
     _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
+
     if supports_patterns:
         _add_app_entity(application_name, "policy", policy_arn)
 
@@ -247,6 +250,52 @@ enable_region_readonly = partial(_enable_policy, "region-readonly")
 enable_dns_management = partial(_enable_policy, "route53")
 enable_object_storage_access = partial(_enable_policy, "s3-read")
 enable_object_storage_management = partial(_enable_policy, "s3-write")
+
+
+def _iam_tag(resource: str, *_, by_name: str = "", by_arn: str = ""):
+    """
+    Tag the given IAM resource with the given tags.
+
+    The resource can be a role or policy.
+
+    Arguments:
+        resource: The type of resource to tag (role, policy)
+        by_name: The name of the resource to tag
+        by_arn: The ARN of the resource to tag
+    Raises:
+        ValueError: If both by_name and by_arn are specified
+        ValueError: If resource is not a valid type or name/arn is missing
+    """
+    if not any((by_name, by_arn)):
+        raise ValueError(f"Must specify either name or ARN for tagging {resource=}")
+    elif by_name and by_arn:
+        raise ValueError(f"Cannot specify both name and ARN for tagging {resource=}")
+    elif resource == "policy" and by_arn:
+        if MODEL_UUID not in by_arn:
+            log(f"No need to tag policy {by_arn=} without {MODEL_UUID=}")
+            return
+        _aws(
+            "iam",
+            "tag-policy",
+            "--policy-arn",
+            by_arn,
+            "--tags",
+            JUJU_MODEL_UUID_TAG,
+        )
+    elif resource == "role" and by_name:
+        _aws(
+            "iam",
+            "tag-role",
+            "--role-name",
+            by_name,
+            "--tags",
+            JUJU_MODEL_UUID_TAG,
+        )
+    else:
+        raise ValueError(
+            "Invalid resource type or missing name/arn: "
+            f"{resource=} {by_arn=} {by_name=}"
+        )
 
 
 def update_policies():
@@ -843,6 +892,7 @@ def _ensure_policy(policy_name):
     """
     if not policy_name.startswith(ENTITY_PREFIX):
         policy_name = "{}.{}".format(ENTITY_PREFIX, policy_name)
+    policy_arn = _get_policy_arn(policy_name)
     policy_file = _get_policy_file(policy_name)
     policy_file_url = "file://{}".format(policy_file.absolute())
     try:
@@ -857,6 +907,7 @@ def _ensure_policy(policy_name):
         log("Loaded IAM policy: {}", policy_name)
     except AlreadyExistsAWSError:
         log("Policy already exists: {} ({})", policy_name, policy_file)
+    _iam_tag("policy", by_arn=policy_arn)
 
 
 def _policy_needs_update(policy_arn):
@@ -919,6 +970,7 @@ def _add_new_policy_version(policy_arn):
         policy_file_url,
         "--set-as-default",
     )
+    _iam_tag("policy", by_arn=policy_arn)
 
 
 def _get_role_name(application_name, instance_id, region):
@@ -953,9 +1005,17 @@ def _ensure_role(application_name, role_name):
         log("Created IAM role: {}", role_name)
     except AlreadyExistsAWSError:
         pass
+    _iam_tag("role", by_name=role_name)
     _add_app_entity(application_name, "role", role_name)
     try:
-        _aws("iam", "create-instance-profile", "--instance-profile-name", role_name)
+        _aws(
+            "iam",
+            "create-instance-profile",
+            "--instance-profile-name",
+            role_name,
+            "--tags",
+            JUJU_MODEL_UUID_TAG,
+        )
         log("Created IAM instance-profile: {}", role_name)
     except AlreadyExistsAWSError:
         pass
