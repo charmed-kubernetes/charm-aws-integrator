@@ -71,3 +71,76 @@ def test_aws_iam_tag_role(aws_mock):
         "--tags",
         f"Key=juju-model-uuid,Value={TEST_MODEL_UUID}",
     )
+
+
+@pytest.mark.parametrize(
+    "message, expected_cls, expected_error_type",
+    [
+        # No recognisable error code → base AWSError with None type
+        (
+            "Something went wrong",
+            aws.AWSError,
+            None,
+        ),
+        # Standard AWS CLI prefix: "An error occurred (Code) when calling …"
+        (
+            "An error occurred (NoSuchEntity) when calling the GetRole operation: "
+            "Role charm.aws.test-role not found.",
+            aws.DoesNotExistAWSError,
+            "NoSuchEntity",
+        ),
+        (
+            "An error occurred (InvalidParameterValue) when calling the CreateRole "
+            "operation: Invalid parameter.",
+            aws.DoesNotExistAWSError,
+            "InvalidParameterValue",
+        ),
+        (
+            "An error occurred (DBInstanceNotFound) when describing instances "
+            "operation: DB instance not found.",
+            aws.DoesNotExistAWSError,
+            "DBInstanceNotFound",
+        ),
+        (
+            "An error occurred (EntityAlreadyExists) when calling the CreateRole "
+            "operation: Role with name charm.aws.test-role already exists.",
+            aws.AlreadyExistsAWSError,
+            "EntityAlreadyExists",
+        ),
+        (
+            "An error occurred (LimitExceeded) when calling the CreateRole operation: "
+            "Limit exceeded.",
+            aws.AlreadyExistsAWSError,
+            "LimitExceeded",
+        ),
+        (
+            "An error occurred (IncorrectState) when calling the DeleteDBInstance "
+            "operation: Incorrect state.",
+            aws.AlreadyExistsAWSError,
+            "IncorrectState",
+        ),
+        # Unknown error code → base AWSError with the code preserved
+        (
+            "An error occurred (UnknownCode) when calling the SomeOperation operation.",
+            aws.AWSError,
+            "UnknownCode",
+        ),
+        # Error code NOT at the start of the string — re.search (not re.match) is needed
+        (
+            "aws: [ERROR]: An error occurred (EntityAlreadyExists) extra detail.",
+            aws.AlreadyExistsAWSError,
+            "EntityAlreadyExists",
+        ),
+        (
+            "aws: [ERROR]: An error occurred (NoSuchEntity) extra detail.",
+            aws.DoesNotExistAWSError,
+            "NoSuchEntity",
+        ),
+    ],
+)
+def test_aws_error_get(message, expected_cls, expected_error_type):
+    """Test AWSError.get factory with various message formats."""
+    err = aws.AWSError.get(message)
+    assert type(err) is expected_cls
+    assert err.error_type == expected_error_type
+    assert str(err) == message

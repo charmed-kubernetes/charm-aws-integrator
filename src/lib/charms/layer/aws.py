@@ -23,7 +23,6 @@ from charms.reactive import endpoint_from_name
 
 from charms.layer import status
 
-
 ENTITY_PREFIX = "charm.aws"
 MODEL_UUID = os.environ["JUJU_MODEL_UUID"]
 MACHINE_ID = os.environ["JUJU_MACHINE_ID"]
@@ -595,7 +594,7 @@ class AWSError(Exception):
         meta-subclass for certain `error_type`s.
         """
         error_type = None
-        match = re.match(r"An error occurred \(([^)]+)\)", message)
+        match = re.search(r"An error occurred \(([^)]+)\)", message)
         if match:
             error_type = match.group(1)
         for error_cls in (DoesNotExistAWSError, AlreadyExistsAWSError):
