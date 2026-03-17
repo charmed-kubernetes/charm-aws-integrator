@@ -11,7 +11,6 @@ from charms import layer
 from charms.layer import aws as layer_aws
 from reactive import aws as reactive_aws
 
-
 _aws = patch_fixture("charms.layer.aws._aws")
 mysql_api = patch_fixture("charms.layer.aws.MySQLRDSManager")
 
