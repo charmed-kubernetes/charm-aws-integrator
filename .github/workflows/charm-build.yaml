@@ -2,8 +2,7 @@ name: Tests
 on:
   push:
     branches:
-      - main
-  pull_request:
+      - ci/pack-aws-integrator-1.36
 
 jobs:
   charmcraft-build:
@@ -12,6 +11,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          ref: 94104eaa3249ba6660ff6a9a98c6cc7fa02bda38
       - name: Read charmcraft version file
         id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT        
